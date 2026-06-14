@@ -1,6 +1,7 @@
-const fs = require("fs");
+﻿const fs = require("fs");
 const path = require("path");
 const { spawn } = require("child_process");
+const { applyProjectEnv } = require("./projectEnv");
 
 const root = path.resolve(__dirname, "..");
 const tmpDir = path.join(root, ".tmp");
@@ -13,13 +14,7 @@ for (const name of ["api", "web"]) {
 }
 
 function cleanEnv(extra = {}) {
-  const env = {};
-  for (const [key, value] of Object.entries(process.env)) {
-    if (key.toLowerCase() === "path") continue;
-    env[key] = value;
-  }
-  env.Path = process.env.Path || process.env.PATH || "";
-  return { ...env, ...extra };
+  return { ...applyProjectEnv(), ...extra };
 }
 
 function spawnService(name, command, args, env = {}) {
@@ -52,18 +47,12 @@ function spawnService(name, command, args, env = {}) {
 const nodeExe = process.execPath;
 const expoCli = path.join(root, "node_modules", "expo", "bin", "cli");
 
-const commonEnv = {
-  NODE_ENV: "development",
-  npm_config_cache: path.join(root, ".npm-cache"),
-  __UNSAFE_EXPO_HOME_DIRECTORY: path.join(root, ".expo-home"),
-  TEMP: path.join(root, ".tmp"),
-  TMP: path.join(root, ".tmp")
-};
+const commonEnv = {};
 
 const api = spawnService("api", nodeExe, ["apps/api/src/server.js"], commonEnv);
 const web = spawnService("web", nodeExe, [expoCli, "start", "--web", "--port", "8082", "--localhost"], commonEnv);
 
-console.log("Local debug services are starting.");
+console.log("Local debug services are starting (project caches on D:).");
 console.log("API:  http://127.0.0.1:4010");
 console.log("Web:  http://127.0.0.1:8082");
 console.log(`Logs: ${tmpDir}`);
@@ -93,3 +82,4 @@ process.on("SIGTERM", () => {
   stopAll();
   process.exit(0);
 });
+

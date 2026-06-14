@@ -19,7 +19,8 @@ $env:NODE_ENV = "development"
 
 New-Item -ItemType Directory -Force -Path $env:GRADLE_USER_HOME, $env:npm_config_cache, $env:__UNSAFE_EXPO_HOME_DIRECTORY, $env:TEMP | Out-Null
 
-Write-Host "Finance Tracker Android debug env"
+# Force project-local caches on D: (avoid C:\Users\...\.gradle)
+Write-Host "Finance Tracker Android debug env (D: project caches)"
 Write-Host "JAVA_HOME=$env:JAVA_HOME"
 Write-Host "ANDROID_HOME=$env:ANDROID_HOME"
 Write-Host "GRADLE_USER_HOME=$env:GRADLE_USER_HOME"
