@@ -2,14 +2,19 @@
 
 Android-first personal finance tracker for local manual accounting, CSV import/export, and user-authorized Android notification capture.
 
-## What works in v0.1
+## What works now
 
+- Local web frontend for PC debugging.
+- Local Express API on `http://127.0.0.1:4010`.
+- Local user registration/login.
+- Encrypted per-user ledger files under `apps/api/data/ledgers`.
 - Manual transaction entry.
-- Pending transaction review before saving.
-- Local storage on device.
+- Pending transaction review before confirming into the ledger.
+- Search and status filters.
 - CSV import/export.
-- Notification text parser for WeChat, Alipay, bank, and broker-style messages.
-- Android native `NotificationListenerService` source and Expo config plugin for development builds.
+- Historical bill text paste/import for lines of notification-style records.
+- Notification text parser for common WeChat, Alipay, bank, and broker-style notification messages.
+- Android native `NotificationListenerService` source and config plugin.
 
 ## Privacy and platform boundaries
 
@@ -17,30 +22,46 @@ This app does not collect account passwords, does not read private data from oth
 
 Cloud sync is intentionally not enabled in this version. The app is local-first to avoid paid infrastructure and reduce sensitive-data exposure.
 
-## Run later
+The local API password is used to derive the encrypted ledger key. User metadata stores PBKDF2 password hashes, while transaction rows are stored in AES-256-GCM encrypted files. This protects the local JSON ledger from casual plaintext inspection, but it is not a replacement for a full production security review.
 
-The current workspace has no installed dependencies for this new project. Installing dependencies or building Android may write caches or SDK files outside this folder, possibly on `C:\`; ask for approval before doing that.
+## Local debugging
 
 ```powershell
 cd D:\CodexOutputs\d-app-ppt\finance-tracker-mobile
-npm install
-npm run prebuild
-npm run android
+npm run dev:local
 ```
 
-Parser-only tests:
+Open the frontend:
+
+```text
+http://127.0.0.1:8082
+```
+
+Seed test data:
 
 ```powershell
-npm run test:parsers
+npm run api:seed
+```
+
+Run tests:
+
+```powershell
+npm test
+```
+
+Stop services:
+
+```powershell
+npm run dev:stop
 ```
 
 ## Android notification listener
 
-After `expo prebuild --platform android`, the config plugin adds:
+The Android project includes:
 
 - `FinanceNotificationListenerService`
 - `FinanceNotificationModule`
 - `FinanceNotificationPackage`
 - Android manifest service registration
 
-The app will show a button to open notification listener settings. Once enabled, captured notifications appear in the pending review list.
+The app has a button to open notification listener settings. Once enabled on a real Android phone, captured notifications should be read into the pending review list. That phone flow still needs fresh APK installation and real-device verification.

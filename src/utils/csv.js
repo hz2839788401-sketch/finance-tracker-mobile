@@ -42,7 +42,7 @@ function splitCsvLine(line) {
   return cells;
 }
 
-export function exportTransactionsCsv(rows) {
+function exportTransactionsCsv(rows) {
   const lines = [headers.join(",")];
   for (const row of rows) {
     lines.push(headers.map((header) => escapeCsv(row[header])).join(","));
@@ -50,7 +50,7 @@ export function exportTransactionsCsv(rows) {
   return `${lines.join("\n")}\n`;
 }
 
-export function parseCsv(content) {
+function parseCsv(content) {
   const lines = String(content || "")
     .replace(/^\uFEFF/, "")
     .split(/\r?\n/)
@@ -65,3 +65,8 @@ export function parseCsv(content) {
     }, {});
   });
 }
+
+module.exports = {
+  exportTransactionsCsv,
+  parseCsv
+};

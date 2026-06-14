@@ -31,7 +31,6 @@
         <category android:name="android.intent.category.BROWSABLE"/>
         <data android:scheme="financetracker"/>
         <data android:scheme="com.local.financetracker"/>
-        <data android:scheme="exp+finance-tracker-mobile"/>
       </intent-filter>
     </activity>
     <activity android:name="com.facebook.react.devsupport.DevSettingsActivity" android:exported="false"/>

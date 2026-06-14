@@ -1,17 +1,15 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as SecureStore from "expo-secure-store";
+import {
+  addTransactionToRows,
+  importCsvRowsToTransactions,
+  sortTransactions,
+  updateTransactionInRows
+} from "../core/ledgerCore";
 
 const STORAGE_KEY = "financeTracker.transactions.v1";
 const FALLBACK_KEY = "financeTracker.transactions.fallback.v1";
 const CHUNK_SIZE = 1800;
-
-function stableFingerprint(item) {
-  return [item.sourceApp, item.amount, item.direction, item.merchant, item.rawText].join("|").toLowerCase();
-}
-
-function createId() {
-  return `tx_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
-}
 
 export async function loadTransactions() {
   let raw = await loadSecurePayload(STORAGE_KEY);
@@ -19,9 +17,7 @@ export async function loadTransactions() {
   if (!raw) return [];
   try {
     const rows = JSON.parse(raw);
-    return Array.isArray(rows)
-      ? rows.sort((a, b) => new Date(b.occurredAt).getTime() - new Date(a.occurredAt).getTime())
-      : [];
+    return Array.isArray(rows) ? sortTransactions(rows) : [];
   } catch {
     return [];
   }
@@ -77,50 +73,19 @@ async function saveSecurePayload(key, payload) {
 
 export async function addTransaction(input) {
   const existing = await loadTransactions();
-  const next = {
-    id: input.id || createId(),
-    source: input.source || "manual",
-    sourceApp: input.sourceApp || "manual",
-    amount: Number(input.amount || 0),
-    direction: input.direction || "expense",
-    merchant: input.merchant || "未命名",
-    category: input.category || "other",
-    accountHint: input.accountHint || "",
-    occurredAt: input.occurredAt || new Date().toISOString(),
-    rawText: input.rawText || "",
-    confidence: Number(input.confidence ?? 1),
-    status: input.status || "pending"
-  };
-  const fingerprint = stableFingerprint(next);
-  if (existing.some((item) => stableFingerprint(item) === fingerprint)) {
-    return false;
-  }
-  await saveTransactions([next, ...existing]);
-  return true;
+  const result = addTransactionToRows(existing, input);
+  if (result.added) await saveTransactions(result.rows);
+  return result.added;
 }
 
 export async function updateTransaction(id, patch) {
   const existing = await loadTransactions();
-  await saveTransactions(existing.map((item) => (item.id === id ? { ...item, ...patch } : item)));
+  await saveTransactions(updateTransactionInRows(existing, id, patch));
 }
 
 export async function importCsvRows(rows) {
-  let count = 0;
-  for (const row of rows) {
-    const added = await addTransaction({
-      source: "import",
-      sourceApp: row.sourceApp || row.source || "import",
-      amount: row.amount,
-      direction: row.direction || "expense",
-      merchant: row.merchant || row.payee || row.description || "导入记录",
-      category: row.category || "other",
-      accountHint: row.accountHint || row.account || "",
-      occurredAt: row.occurredAt || row.date || new Date().toISOString(),
-      rawText: row.rawText || row.description || "",
-      confidence: 1,
-      status: row.status || "confirmed"
-    });
-    if (added) count += 1;
-  }
-  return count;
+  const existing = await loadTransactions();
+  const result = importCsvRowsToTransactions(existing, rows);
+  await saveTransactions(result.rows);
+  return result.imported;
 }

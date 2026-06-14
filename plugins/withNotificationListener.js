@@ -198,6 +198,20 @@ class FinanceNotificationPackage : ReactPackage {
   );
 }
 
+function ensureSplashColor(projectRoot) {
+  const drawableDir = path.join(projectRoot, "android/app/src/main/res/drawable");
+  const splashFile = path.join(drawableDir, "splashscreen.xml");
+  fs.mkdirSync(drawableDir, { recursive: true });
+  fs.writeFileSync(
+    splashFile,
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+  <solid android:color="#f8fafc"/>
+</shape>
+`
+  );
+}
+
 module.exports = function withNotificationListener(config) {
   const packageName = getPackageName(config);
   config = withAndroidManifest(config, (mod) => {
@@ -209,6 +223,7 @@ module.exports = function withNotificationListener(config) {
     "android",
     (mod) => {
       writeNativeSources(mod.modRequest.projectRoot, packageName);
+      ensureSplashColor(mod.modRequest.projectRoot);
       return mod;
     }
   ]);

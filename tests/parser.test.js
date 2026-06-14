@@ -4,15 +4,15 @@ const { parseNotificationText } = require("../src/parsers/notificationParser");
 const cases = [
   {
     text: "微信支付：你已向星巴克支付18.00元",
-    expected: { sourceApp: "wechat", amount: 18, direction: "expense", category: "food" }
+    expected: { sourceApp: "wechat", amount: 18, direction: "expense", category: "food", merchant: "星巴克" }
   },
   {
     text: "支付宝到账提醒：收到张三转账200.00元",
-    expected: { sourceApp: "alipay", amount: 200, direction: "income", category: "transfer" }
+    expected: { sourceApp: "alipay", amount: 200, direction: "income", category: "transfer", merchant: "张三" }
   },
   {
     text: "招商银行信用卡尾号1234消费人民币86.50元，商户美团",
-    expected: { sourceApp: "bank", amount: 86.5, direction: "expense", accountHint: "尾号 1234" }
+    expected: { sourceApp: "bank", amount: 86.5, direction: "expense", accountHint: "尾号 1234", merchant: "美团" }
   },
   {
     text: "证券交易提醒：买入沪深300ETF 1000.00元，成交成功",
@@ -21,6 +21,10 @@ const cases = [
   {
     text: "支付宝退款通知：退款35.80元已到账",
     expected: { sourceApp: "alipay", amount: 35.8, direction: "refund" }
+  },
+  {
+    text: "未知提醒：你的会员已续费",
+    expected: { sourceApp: "unknown", amount: 0, direction: "expense", category: "other" }
   }
 ];
 

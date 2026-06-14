@@ -1,0 +1,15 @@
+{
+  "name": "@finance-tracker/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "dev": "node src/server.js",
+    "seed": "node tests/seed.js",
+    "smoke": "node tests/smoke.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.21.2"
+  }
+}

@@ -1,12 +1,20 @@
+const UNKNOWN_MERCHANT = "未识别来源";
+
 const sourceRules = [
   { sourceApp: "wechat", patterns: [/微信|WeChat/i] },
   { sourceApp: "alipay", patterns: [/支付宝|Alipay/i] },
-  { sourceApp: "bank", patterns: [/银行|信用卡|储蓄卡|尾号|人民币|入账|扣款/i] },
-  { sourceApp: "broker", patterns: [/证券|券商|股票|基金|买入|卖出|成交|ETF/i] }
+  {
+    sourceApp: "bank",
+    patterns: [/银行|信用卡|储蓄卡|尾号|卡号|人民币|入账|扣款|消费/i]
+  },
+  {
+    sourceApp: "broker",
+    patterns: [/证券|券商|股票|基金|买入|卖出|成交|ETF/i]
+  }
 ];
 
 const categoryRules = [
-  { category: "food", pattern: /餐|咖啡|奶茶|外卖|美团|饿了么|星巴克|麦当劳|肯德基/i },
+  { category: "food", pattern: /餐饮|咖啡|奶茶|外卖|美团|饿了么|星巴克|麦当劳|肯德基/i },
   { category: "shopping", pattern: /淘宝|天猫|京东|拼多多|购物|超市|便利店/i },
   { category: "transport", pattern: /滴滴|地铁|公交|铁路|机票|加油|停车/i },
   { category: "housing", pattern: /房租|物业|水费|电费|燃气/i },
@@ -33,9 +41,9 @@ function detectCategory(text) {
 
 function extractAmount(text) {
   const candidates = [
-    /(?:人民币|RMB|CNY|¥|￥)\s*([0-9]+(?:,[0-9]{3})*(?:\.[0-9]{1,2})?)/i,
+    /(?:人民币|RMB|CNY|￥|¥)\s*([0-9]+(?:,[0-9]{3})*(?:\.[0-9]{1,2})?)/i,
     /([0-9]+(?:,[0-9]{3})*(?:\.[0-9]{1,2})?)\s*(?:元|CNY|RMB)/i,
-    /(?:消费|支付|付款|转账|收款|到账|退款|买入|卖出|成交)[^\d]{0,8}([0-9]+(?:,[0-9]{3})*(?:\.[0-9]{1,2})?)/i
+    /(?:消费|支付|付款|转账|收款|到账|退款|买入|卖出|成交)[^\d]{0,12}([0-9]+(?:,[0-9]{3})*(?:\.[0-9]{1,2})?)/i
   ];
 
   for (const pattern of candidates) {
@@ -52,11 +60,11 @@ function extractAccountHint(text) {
 
 function extractMerchant(text) {
   const merchantPatterns = [
-    /商户[:：]?\s*([^，,。；;]+)/,
-    /向([^，,。；;]+?)支付/,
-    /在([^，,。；;]+?)消费/,
-    /收到([^，,。；;]+?)转账/,
-    /转账给([^，,。；;]+)/
+    /商户[:：]?\s*([^，。；;]+)/,
+    /向([^，。；;]+?)支付/,
+    /在([^，。；;]+?)消费/,
+    /收到([^，。；;]+?)转账/,
+    /转账给([^，。；;]+)/
   ];
 
   for (const pattern of merchantPatterns) {
@@ -68,14 +76,14 @@ function extractMerchant(text) {
   if (/微信/i.test(text)) return "微信支付";
   if (/支付宝/i.test(text)) return "支付宝";
   if (/银行|信用卡|储蓄卡/i.test(text)) return "银行卡";
-  return "未识别来源";
+  return UNKNOWN_MERCHANT;
 }
 
 function confidenceFor(parsed) {
   let score = 0.25;
   if (parsed.sourceApp !== "unknown") score += 0.2;
   if (parsed.amount > 0) score += 0.3;
-  if (parsed.merchant && parsed.merchant !== "未识别来源") score += 0.15;
+  if (parsed.merchant && parsed.merchant !== UNKNOWN_MERCHANT) score += 0.15;
   if (parsed.category !== "other") score += 0.1;
   return Math.min(1, Number(score.toFixed(2)));
 }
