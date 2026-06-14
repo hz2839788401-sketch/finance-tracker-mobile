@@ -4,19 +4,37 @@ Android-first personal finance tracker for local manual accounting, CSV import/e
 
 ## What works now
 
-- Local web frontend for PC debugging.
-- Local Express API on `http://127.0.0.1:4010`.
-- Local user registration/login.
-- Encrypted per-user ledger files under `apps/api/data/ledgers`.
-- Manual transaction entry.
-- Pending transaction review before confirming into the ledger.
-- Search and status filters.
-- CSV import/export.
-- Historical bill text paste/import for lines of notification-style records.
-- Notification text parser for common WeChat, Alipay, bank, and broker-style notification messages.
-- Android native `NotificationListenerService` source and config plugin.
+- Animated startup splash screen.
+- **Phone standalone unlock**: device password stored in SecureStore; no PC API required on Android.
+- **PC browser debugging** via local web frontend + Express API.
+- Local Express API on `http://127.0.0.1:4010` (web login / encrypted ledgers).
+- Manual transaction entry, pending review, CSV import/export, bill text import.
+- Notification text parser for WeChat, Alipay, bank, and broker-style messages.
+- Android `NotificationListenerService` for notification sync on real devices.
 
-## Privacy and platform boundaries
+## Phone vs PC login
+
+| Platform | Login | Data storage |
+|----------|-------|--------------|
+| Android APK | Create/unlock with device password | SecureStore on phone |
+| PC browser (`npm run dev:local`) | Register/login against local API | Encrypted JSON under `apps/api/data/` |
+
+## Download release APK
+
+Prebuilt APK is in the repo:
+
+```text
+release/finance-tracker-standalone.apk
+```
+
+Rebuild locally (Windows: source `scripts/env.ps1` if Gradle cannot find JDK/SDK):
+
+```powershell
+. .\scripts\env.ps1
+npm run release:android
+```
+
+## Local debugging (PC)
 
 This app does not collect account passwords, does not read private data from other apps, and does not bypass WeChat, Alipay, bank, or broker restrictions. Notification capture only works after the user grants Android notification access in system settings, and it can only capture new posted notifications.
 

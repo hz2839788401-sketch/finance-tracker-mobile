@@ -1,9 +1,8 @@
 ﻿# Release artifacts
 
-APK builds live outside this repo:
+| File | Description |
+|------|-------------|
+| `finance-tracker-standalone.apk` | Android release build for phone install |
+| `RELEASE_NOTES.md` | Version notes and install steps |
 
-` `
-D:\CodexOutputs\d-app-ppt\finance-tracker-releases\
-` `
-
-See finance-tracker-standalone.apk, finance-tracker-debug.apk, RELEASE_NOTES.md there.
+These binaries are tracked in GitHub for download convenience.

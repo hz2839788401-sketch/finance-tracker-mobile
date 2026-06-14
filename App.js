@@ -21,11 +21,23 @@ import * as FileSystem from "expo-file-system";
 import * as Sharing from "expo-sharing";
 import { Ionicons } from "@expo/vector-icons";
 import * as ledgerApi from "./src/api/ledgerApi";
+import {
+  clearDeviceSession,
+  getDeviceAccountMeta,
+  hasDeviceAccount,
+  loadDeviceSession,
+  registerDeviceAccount,
+  unlockDeviceAccount
+} from "./src/auth/deviceAuth";
+import SplashScreen from "./src/components/SplashScreen";
 import { categories, sampleNotifications } from "./src/data/constants";
 import { computeStats, filterTransactions } from "./src/core/ledgerCore";
 import { parseNotificationText } from "./src/parsers/notificationParser";
 import { addTransaction, importCsvRows, loadTransactions, updateTransaction } from "./src/storage/ledger";
 import { exportTransactionsCsv, parseCsv } from "./src/utils/csv";
+
+const IS_WEB = Platform.OS === "web";
+const SPLASH_MS = 1800;
 
 const emptyDraft = {
   amount: "",
@@ -52,21 +64,79 @@ export default function App() {
   const [debugText, setDebugText] = useState(sampleNotifications[0]);
   const [debugParsed, setDebugParsed] = useState(parseNotificationText(sampleNotifications[0]));
   const [dataSource, setDataSource] = useState("checking");
+  const [showSplash, setShowSplash] = useState(true);
+  const [bootReady, setBootReady] = useState(false);
+  const [authKind, setAuthKind] = useState(IS_WEB ? "api" : "device");
+  const [deviceAccountExists, setDeviceAccountExists] = useState(false);
 
   useEffect(() => {
-    const token = localStorageGet("financeTracker.apiToken");
-    const userRaw = localStorageGet("financeTracker.apiUser");
-    if (token) {
-      ledgerApi.setAuthToken(token);
-      setAuth({ token, user: userRaw ? JSON.parse(userRaw) : null });
+    let cancelled = false;
+
+    async function bootstrap() {
+      const splashDelay = new Promise((resolve) => setTimeout(resolve, SPLASH_MS));
+
+      if (IS_WEB) {
+        const token = localStorageGet("financeTracker.apiToken");
+        const userRaw = localStorageGet("financeTracker.apiUser");
+        if (token) {
+          ledgerApi.setAuthToken(token);
+          try {
+            await ledgerApi.health();
+            if (!cancelled) {
+              setAuth({ token, user: userRaw ? JSON.parse(userRaw) : null });
+              setDataSource("api");
+              setAuthKind("api");
+            }
+          } catch {
+            if (!cancelled) {
+              ledgerApi.setAuthToken("");
+              localStorageSet("financeTracker.apiToken", "");
+            }
+          }
+        }
+      } else {
+        const exists = await hasDeviceAccount();
+        if (!cancelled) {
+          setDeviceAccountExists(exists);
+          setAuthMode(exists ? "login" : "register");
+        }
+        const session = await loadDeviceSession();
+        if (session?.token && !cancelled) {
+          setAuth({ token: session.token, user: session.user });
+          setDataSource("local");
+          setAuthKind("device");
+        } else if (exists) {
+          const meta = await getDeviceAccountMeta();
+          if (meta?.username && !cancelled) {
+            setAuthDraft((prev) => ({ ...prev, username: meta.username }));
+          }
+        }
+      }
+
+      await splashDelay;
+      if (!cancelled) {
+        setShowSplash(false);
+        setBootReady(true);
+      }
     }
+
+    bootstrap();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
-    if (auth.token) refresh();
-  }, [auth.token]);
+    if (bootReady && auth.token) refresh();
+  }, [auth.token, bootReady]);
 
   async function refresh() {
+    if (authKind === "device" || dataSource === "local") {
+      const rows = await loadTransactions();
+      setTransactions(rows);
+      setDataSource("local");
+      return;
+    }
     try {
       await ledgerApi.health();
       if (!auth.token) return;
@@ -83,6 +153,19 @@ export default function App() {
   async function submitAuth() {
     setAuthError("");
     try {
+      if (authKind === "device") {
+        const session =
+          authMode === "register"
+            ? await registerDeviceAccount(authDraft.username, authDraft.password)
+            : await unlockDeviceAccount(authDraft.password);
+        setAuth({ token: session.token, user: session.user });
+        setDataSource("local");
+        setDeviceAccountExists(true);
+        setAuthMode("login");
+        refresh();
+        return;
+      }
+
       await ledgerApi.health();
       const result =
         authMode === "register"
@@ -93,27 +176,37 @@ export default function App() {
       localStorageSet("financeTracker.apiUser", JSON.stringify(result.user));
       setAuth({ token: result.token, user: result.user });
       setDataSource("api");
+      refresh();
     } catch (error) {
       setAuthError(error.message || "登录失败");
     }
   }
 
-  function logout() {
-    ledgerApi.setAuthToken("");
-    localStorageSet("financeTracker.apiToken", "");
-    localStorageSet("financeTracker.apiUser", "");
+  async function logout() {
+    if (authKind === "device") {
+      await clearDeviceSession();
+    } else {
+      ledgerApi.setAuthToken("");
+      localStorageSet("financeTracker.apiToken", "");
+      localStorageSet("financeTracker.apiUser", "");
+    }
     setAuth({ token: "", user: null });
     setTransactions([]);
     setDataSource("checking");
+    if (!IS_WEB) {
+      const exists = await hasDeviceAccount();
+      setDeviceAccountExists(exists);
+      setAuthMode("login");
+    }
   }
 
   async function saveTransaction(payload) {
-    if (dataSource === "api") return ledgerApi.addTransaction(payload);
+    if (dataSource === "api" && authKind === "api") return ledgerApi.addTransaction(payload);
     return addTransaction(payload);
   }
 
   async function patchTransaction(id, patch) {
-    if (dataSource === "api") return ledgerApi.updateTransaction(id, patch);
+    if (dataSource === "api" && authKind === "api") return ledgerApi.updateTransaction(id, patch);
     return updateTransaction(id, patch);
   }
 
@@ -173,7 +266,7 @@ export default function App() {
         ...parsed,
         source: "notification",
         rawText: parsed.rawText || item.text || item.title || "",
-        occurredAt: item.postedAt || new Date().toISOString(),
+        occurredAt: item.postedAt ? new Date(item.postedAt).toISOString() : new Date().toISOString(),
         status: "pending"
       });
     }
@@ -207,7 +300,7 @@ export default function App() {
     const rows = parseCsv(content);
 
     let imported = 0;
-    if (dataSource === "api") {
+    if (dataSource === "api" && authKind === "api") {
       for (const row of rows) {
         const added = await ledgerApi.addTransaction({
           source: "import",
@@ -275,16 +368,27 @@ export default function App() {
   const filtered = useMemo(() => filterTransactions(transactions, tab, query), [transactions, tab, query]);
   const stats = useMemo(() => computeStats(transactions), [transactions]);
 
+  if (showSplash || !bootReady) {
+    return (
+      <View style={styles.splashHost}>
+        <ExpoStatusBar style="light" />
+        <SplashScreen />
+      </View>
+    );
+  }
+
   if (!auth.token) {
     return (
       <SafeAreaView style={styles.safe}>
         <ExpoStatusBar style="dark" />
         <AuthScreen
+          authKind={authKind}
           mode={authMode}
           setMode={setAuthMode}
           draft={authDraft}
           setDraft={setAuthDraft}
           error={authError}
+          deviceAccountExists={deviceAccountExists}
           onSubmit={submitAuth}
         />
       </SafeAreaView>
@@ -299,6 +403,7 @@ export default function App() {
           stats={stats}
           pendingCount={transactions.filter((item) => item.status === "pending").length}
           dataSource={dataSource}
+          authKind={authKind}
           user={auth.user}
           onRefresh={refresh}
           onLogout={logout}
@@ -382,14 +487,29 @@ function parseNativeNotifications(rawItems) {
   }
 }
 
-function AuthScreen({ mode, setMode, draft, setDraft, error, onSubmit }) {
+function AuthScreen({ authKind, mode, setMode, draft, setDraft, error, deviceAccountExists, onSubmit }) {
+  const isDevice = authKind === "device";
+  const showRegister = isDevice ? !deviceAccountExists : mode === "register";
+  const showUsername = !isDevice || showRegister;
+
   return (
     <View style={styles.authWrap}>
       <View style={styles.authPanel}>
-        <Text style={styles.kicker}>本地账号</Text>
+        <Text style={styles.kicker}>{isDevice ? "本机解锁" : "电脑联调账号"}</Text>
         <Text style={styles.title}>Finance Tracker</Text>
-        <Text style={styles.authNote}>账号只保存在这台电脑的本地 API 里，用来隔离并加密你的账本。</Text>
-        <TextInput style={styles.input} placeholder="用户名" value={draft.username} onChangeText={(username) => setDraft((prev) => ({ ...prev, username }))} />
+        <Text style={styles.authNote}>
+          {isDevice
+            ? "密码只保存在本机安全存储里，账本数据也只在手机上，无需连接电脑 API。"
+            : "账号保存在本机 Express API（4010）里，用于浏览器联调与加密账本。"}
+        </Text>
+        {showUsername ? (
+          <TextInput
+            style={styles.input}
+            placeholder={isDevice ? "账本名称（可选）" : "用户名"}
+            value={draft.username}
+            onChangeText={(username) => setDraft((prev) => ({ ...prev, username }))}
+          />
+        ) : null}
         <TextInput
           style={styles.input}
           placeholder="密码，至少 6 位"
@@ -399,22 +519,25 @@ function AuthScreen({ mode, setMode, draft, setDraft, error, onSubmit }) {
         />
         {error ? <Text style={styles.errorText}>{error}</Text> : null}
         <Pressable style={styles.saveButton} onPress={onSubmit}>
-          <Text style={styles.saveText}>{mode === "register" ? "注册并进入" : "登录"}</Text>
+          <Text style={styles.saveText}>{showRegister ? "创建并进入" : "解锁进入"}</Text>
         </Pressable>
-        <Pressable style={styles.linkButton} onPress={() => setMode(mode === "register" ? "login" : "register")}>
-          <Text style={styles.linkText}>{mode === "register" ? "已有账号，去登录" : "没有账号，创建本地账号"}</Text>
-        </Pressable>
+        {!isDevice ? (
+          <Pressable style={styles.linkButton} onPress={() => setMode(mode === "register" ? "login" : "register")}>
+            <Text style={styles.linkText}>{mode === "register" ? "已有账号，去登录" : "没有账号，创建本地账号"}</Text>
+          </Pressable>
+        ) : null}
       </View>
     </View>
   );
 }
 
-function Header({ stats, pendingCount, dataSource, user, onRefresh, onLogout }) {
-  const sourceLabel = dataSource === "api" ? "本地 API/JSON 数据库" : dataSource === "local" ? "设备本地存储" : "连接中";
+function Header({ stats, pendingCount, dataSource, authKind, user, onRefresh, onLogout }) {
+  const sourceLabel =
+    dataSource === "api" ? "本地 API/JSON 数据库" : dataSource === "local" ? "手机本机存储" : "连接中";
   return (
     <View style={styles.header}>
       <View>
-        <Text style={styles.kicker}>本地联调账本</Text>
+        <Text style={styles.kicker}>{authKind === "device" ? "手机本机账本" : "电脑联调账本"}</Text>
         <Text style={styles.title}>Finance Tracker</Text>
         <Text style={styles.sourceText}>数据源：{sourceLabel}</Text>
         <Text style={styles.sourceText}>账号：{user?.username || "local"}</Text>
@@ -602,6 +725,7 @@ function BillTextModal({ open, text, onTextChange, onImport, onClose }) {
 }
 
 const styles = StyleSheet.create({
+  splashHost: { flex: 1, backgroundColor: "#0f172a" },
   safe: { flex: 1, backgroundColor: "#f8fafc", paddingTop: Platform.OS === "android" ? StatusBar.currentHeight : 0 },
   container: { flex: 1, paddingHorizontal: 16 },
   authWrap: { flex: 1, justifyContent: "center", padding: 18 },

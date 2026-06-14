@@ -12,8 +12,8 @@ apps/api/node_modules/
 android/app/build/
 android/build/
 android/.cxx/
-*.apk
 *.aab
+android/app/build/**/*.apk
 
 # npm cache (local dev script)
 .npm-cache/
@@ -21,9 +21,8 @@ android/.cxx/
 # Local API data (users, encrypted ledgers)
 apps/api/data/
 
-# Release binaries (stored outside repo)
-release/*.apk
-release/*.aab
+# Release: track standalone APK in release/; ignore debug builds elsewhere
+release/*-debug.apk
 
 # OS / IDE
 .DS_Store
